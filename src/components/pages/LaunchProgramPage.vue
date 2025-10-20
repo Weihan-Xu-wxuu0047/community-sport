@@ -1155,7 +1155,6 @@ function parseAddressComponents(suggestion) {
     postcode: '',
     state: ''
   };
-
   // Extract street address from place_name
   const placeParts = suggestion.place_name.split(',');
   if (placeParts.length > 0) {

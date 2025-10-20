@@ -3,7 +3,9 @@ import {
   signInWithEmailAndPassword, 
   signOut,
   onAuthStateChanged,
-  getIdTokenResult
+  getIdTokenResult,
+  GoogleAuthProvider,
+  signInWithPopup
 } from 'firebase/auth';
 import { 
   doc, 
@@ -349,6 +351,80 @@ class AuthService {
     };
   }
 
+  // Google Authentication
+  async signInWithGoogle(role) {
+    try {
+      const provider = new GoogleAuthProvider();
+      provider.addScope('email');
+      provider.addScope('profile');
+      
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+      
+      // Check if user document exists in Firestore
+      const userDocRef = doc(db, 'user-information', user.uid);
+      const userDoc = await getDoc(userDocRef);
+      
+      let userRoles = [];
+      let userName = user.displayName || user.email.split('@')[0];
+      
+      if (userDoc.exists()) {
+        // User document exists, get existing roles
+        const userData = userDoc.data();
+        userRoles = userData.roles || (userData.role ? [userData.role] : []);
+        
+        // Add new role if not already present
+        if (!userRoles.includes(role)) {
+          userRoles.push(role);
+          
+          // Update existing document with new role
+          await updateDoc(userDocRef, {
+            userName: userName,
+            roles: userRoles,
+            lastLoginRole: role,
+            lastUpdated: new Date().toISOString()
+          });
+        } else {
+          // Role already exists, just update last login role and userName
+          await updateDoc(userDocRef, {
+            userName: userName,
+            lastLoginRole: role,
+            lastUpdated: new Date().toISOString()
+          });
+        }
+      } else {
+        // Create new user document
+        userRoles = [role];
+        const userRoleData = {
+          uid: user.uid,
+          userName: userName,
+          email: user.email,
+          roles: userRoles,
+          role: role, // Keep for backward compatibility
+          lastLoginRole: role,
+          createdAt: new Date().toISOString(),
+          lastUpdated: new Date().toISOString(),
+          provider: 'google'
+        };
+        
+        await setDoc(userDocRef, userRoleData);
+        console.log('Google user document created successfully:', userRoleData);
+      }
+      
+      // Set current role immediately for the auth state listener
+      this.currentRole = role;
+      
+      return {
+        user: user,
+        role: role,
+        availableRoles: userRoles,
+        userName: userName
+      };
+    } catch (error) {
+      throw new Error(this.getErrorMessage(error));
+    }
+  }
+
   // Get user-friendly error messages
   getErrorMessage(error) {
     switch (error.code) {
@@ -364,6 +440,12 @@ class AuthService {
         return 'Please enter a valid email address.';
       case 'auth/too-many-requests':
         return 'Too many failed attempts. Please try again later.';
+      case 'auth/popup-closed-by-user':
+        return 'Google sign-in was cancelled. Please try again.';
+      case 'auth/popup-blocked':
+        return 'Google sign-in popup was blocked. Please allow popups and try again.';
+      case 'auth/cancelled-popup-request':
+        return 'Google sign-in was cancelled. Please try again.';
       case 'permission-denied':
         return 'Permission denied. Please check your Firestore security rules or contact support.';
       case 'unavailable':

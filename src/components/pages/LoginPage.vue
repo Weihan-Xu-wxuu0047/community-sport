@@ -138,6 +138,28 @@
                 </p>
               </div>
             </form>
+
+            <!-- Divider -->
+            <div class="position-relative my-4">
+              <hr class="my-0">
+              <div class="position-absolute top-50 start-50 translate-middle bg-white px-3">
+                <span class="text-muted small">or</span>
+              </div>
+            </div>
+
+            <!-- Google Sign In -->
+            <div class="d-grid gap-2">
+              <button
+                type="button"
+                class="btn btn-outline-danger"
+                @click="handleGoogleSignIn"
+                :disabled="isGoogleSigningIn || !form.loginType"
+              >
+                <span v-if="isGoogleSigningIn" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                <i v-else class="bi bi-google me-2" aria-hidden="true"></i>
+                {{ isGoogleSigningIn ? 'Signing in...' : `Continue with Google as ${form.loginType}` }}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -200,6 +222,7 @@ const errors = reactive({
 });
 
 const isSubmitting = ref(false);
+const isGoogleSigningIn = ref(false);
 const showPassword = ref(false);
 const errorMessage = ref('');
 
@@ -316,6 +339,38 @@ async function handleLogin() {
     console.error('Login error:', error);
   } finally {
     isSubmitting.value = false;
+  }
+}
+
+// Google Authentication
+async function handleGoogleSignIn() {
+  if (!form.loginType) {
+    errorMessage.value = 'Please select a login type first.';
+    return;
+  }
+
+  errorMessage.value = '';
+  isGoogleSigningIn.value = true;
+
+  try {
+    const result = await authService.signInWithGoogle(form.loginType);
+
+    // Small delay for better UX
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    // Redirect to appropriate account page
+    const targetPage = form.loginType === 'organizer' ? 'organizer-account' : 'member-account';
+    console.log('Google login successful, redirecting to:', targetPage);
+    console.log('User role:', result.role);
+    
+    await router.push({ name: targetPage });
+    console.log('Redirect completed');
+
+  } catch (error) {
+    errorMessage.value = error.message;
+    console.error('Google login error:', error);
+  } finally {
+    isGoogleSigningIn.value = false;
   }
 }
 </script>

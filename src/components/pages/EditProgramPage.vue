@@ -14,6 +14,7 @@
           </div>
           <div class="d-flex gap-2">
             <button
+              v-if="program && program.status !== 'cancelled'"
               @click="showCancelConfirmation = true"
               class="btn btn-outline-danger"
               :disabled="isSubmitting || isCanceling"
@@ -21,6 +22,10 @@
               <i class="bi bi-x-circle me-2"></i>
               Cancel Program
             </button>
+            <span v-else-if="program && program.status === 'cancelled'" class="badge bg-danger fs-6">
+              <i class="bi bi-x-circle me-1"></i>
+              Program Cancelled
+            </span>
           </div>
         </div>
 
@@ -104,7 +109,13 @@
             </div>
           </div>
 
-          <form @submit.prevent="handleSubmit" novalidate>
+          <!-- Cancelled Program Notice -->
+          <div v-if="program && program.status === 'cancelled'" class="alert alert-warning" role="alert">
+            <i class="bi bi-exclamation-triangle me-2"></i>
+            <strong>This program has been cancelled.</strong> You cannot edit cancelled programs.
+          </div>
+
+          <form @submit.prevent="handleSubmit" novalidate :class="{ 'form-disabled': program && program.status === 'cancelled' }">
             <div class="row g-4">
               <!-- Main Program Information -->
               <div class="col-md-8">
@@ -709,7 +720,7 @@
                     <button
                       type="submit"
                       class="btn btn-success w-100"
-                      :disabled="isSubmitting || !isFormValid"
+                      :disabled="isSubmitting || !isFormValid || (program && program.status === 'cancelled')"
                     >
                       <span v-if="isSubmitting" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
                       <i v-else class="bi bi-check-circle me-2" aria-hidden="true"></i>
@@ -1837,5 +1848,19 @@ async function cancelProgram() {
 
 #program-images:hover {
   border-color: #0d6efd;
+}
+
+/* Disabled form styling */
+.form-disabled {
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+.form-disabled input,
+.form-disabled textarea,
+.form-disabled select,
+.form-disabled button {
+  background-color: #f8f9fa !important;
+  cursor: not-allowed !important;
 }
 </style>

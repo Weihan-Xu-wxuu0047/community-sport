@@ -209,6 +209,28 @@
                 </p>
               </div>
             </form>
+
+            <!-- Divider -->
+            <div class="position-relative my-4">
+              <hr class="my-0">
+              <div class="position-absolute top-50 start-50 translate-middle bg-white px-3">
+                <span class="text-muted small">or</span>
+              </div>
+            </div>
+
+            <!-- Google Sign Up -->
+            <div class="d-grid gap-2">
+              <button
+                type="button"
+                class="btn btn-outline-danger"
+                @click="handleGoogleSignUp"
+                :disabled="isGoogleSigningUp || !form.role"
+              >
+                <span v-if="isGoogleSigningUp" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                <i v-else class="bi bi-google me-2" aria-hidden="true"></i>
+                {{ isGoogleSigningUp ? 'Signing up...' : `Continue with Google as ${form.role}` }}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -248,6 +270,7 @@ const errors = reactive({
 });
 
 const isSubmitting = ref(false);
+const isGoogleSigningUp = ref(false);
 const showPassword = ref(false);
 const successMessage = ref('');
 const errorMessage = ref('');
@@ -407,6 +430,45 @@ async function handleRegister() {
     console.error('Registration error:', error);
   } finally {
     isSubmitting.value = false;
+  }
+}
+
+// Google Authentication
+async function handleGoogleSignUp() {
+  if (!form.role) {
+    errorMessage.value = 'Please select a role first.';
+    return;
+  }
+
+  errorMessage.value = '';
+  isGoogleSigningUp.value = true;
+
+  try {
+    const result = await authService.signInWithGoogle(form.role);
+
+    if (result.availableRoles && result.availableRoles.length > 1) {
+      successMessage.value = `${form.role} role added successfully! You now have access to both member and organizer features.`;
+      isExistingUser.value = true;
+    } else {
+      successMessage.value = `Account created successfully! Welcome to Community Sport as a ${form.role}.`;
+    }
+
+    // Redirect to appropriate account page after short delay
+    setTimeout(() => {
+      const targetPage = form.role === 'organizer' ? 'organizer-account' : 'member-account';
+      router.push({ name: targetPage });
+    }, 2000);
+
+  } catch (error) {
+    // Check if this is an existing user trying to add a role
+    if (error.message.includes('email-already-in-use')) {
+      errorMessage.value = 'This email is already registered. Please sign in first, then you can add additional roles from your account page.';
+    } else {
+      errorMessage.value = error.message;
+    }
+    console.error('Google registration error:', error);
+  } finally {
+    isGoogleSigningUp.value = false;
   }
 }
 </script>

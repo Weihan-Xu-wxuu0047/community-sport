@@ -50,10 +50,21 @@
         <!-- My Programs Overview -->
         <div class="card mb-4">
           <div class="card-header bg-light">
+            <div class="d-flex justify-content-between align-items-center">
             <h5 class="card-title mb-0">
               <i class="bi bi-list-check me-2" aria-hidden="true"></i>
               My Programs
             </h5>
+               <button 
+                 @click="exportToPDF" 
+                 class="btn btn-outline-primary btn-sm"
+                 :disabled="isExporting || activePrograms.length === 0"
+               >
+                 <span v-if="isExporting" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                 <i v-else class="bi bi-file-earmark-pdf me-2" aria-hidden="true"></i>
+                 {{ isExporting ? 'Exporting...' : 'Export PDF' }}
+               </button>
+            </div>
           </div>
           <div class="card-body">
             <!-- Loading State -->
@@ -74,7 +85,7 @@
             </div>
 
             <!-- Empty State -->
-            <div v-else-if="myPrograms.length === 0" class="text-center py-5">
+            <div v-else-if="activePrograms.length === 0 && cancelledPrograms.length === 0" class="text-center py-5">
               <i class="bi bi-clipboard-data display-4 text-muted mb-3" aria-hidden="true"></i>
               <h6 class="text-muted mb-3">No Programs Created Yet</h6>
               <p class="text-muted mb-4">
@@ -85,67 +96,170 @@
                 Create Your First Program
               </RouterLink>
             </div>
-
-            <!-- Programs List -->
-            <div v-else class="row g-4">
-              <div v-for="program in myPrograms" :key="program.id" class="col-md-6 col-lg-4">
-                <div class="card h-100 border-0 shadow-sm">
-                  <div class="card-header bg-light border-0">
-                    <div class="d-flex justify-content-between align-items-start">
-                      <div>
-                        <h6 class="card-title mb-1">{{ program.title }}</h6>
-                        <small class="text-muted">{{ program.sport }}</small>
+            
+            <!-- Active Programs List -->
+            <div v-else>
+              <div v-if="activePrograms.length > 0" class="row g-4">
+                <div v-for="program in activePrograms" :key="program.id" class="col-md-6 col-lg-4">
+                  <div class="card h-100 border-0 shadow-sm">
+                    <div class="card-header bg-light border-0">
+                      <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                          <h6 class="card-title mb-1">{{ program.title }}</h6>
+                          <small class="text-muted">{{ program.sport }}</small>
+                        </div>
+                        <span class="badge bg-success">Active</span>
                       </div>
-                      <span class="badge bg-success">Active</span>
                     </div>
-                  </div>
-                  <div class="card-body">
-                    <p class="card-text text-muted small mb-3">
-                      {{ program.description.length > 100 ? program.description.substring(0, 100) + '...' : program.description }}
-                    </p>
-                    
-                    <div class="mb-3">
-                      <div class="d-flex align-items-center mb-2">
-                        <i class="bi bi-geo-alt text-muted me-2"></i>
-                        <small class="text-muted">{{ program.venue?.name || 'Venue TBD' }}</small>
+                    <div class="card-body">
+                      <p class="card-text text-muted small mb-3">
+                        {{ program.description.length > 100 ? program.description.substring(0, 100) + '...' : program.description }}
+                      </p>
+                      
+                      <div class="mb-3">
+                        <div class="d-flex align-items-center mb-2">
+                          <i class="bi bi-geo-alt text-muted me-2"></i>
+                          <small class="text-muted">{{ program.venue?.name || 'Venue TBD' }}</small>
+                        </div>
+                        <div class="d-flex align-items-center mb-2">
+                          <i class="bi bi-people text-muted me-2"></i>
+                          <small class="text-muted">Max {{ program.maxParticipants }} participants</small>
+                        </div>
+                        <div class="d-flex align-items-center">
+                          <i class="bi bi-currency-dollar text-muted me-2"></i>
+                          <small class="text-muted">
+                            {{ program.cost === 0 ? 'Free' : `$${program.cost} ${program.costUnit}` }}
+                          </small>
+                        </div>
                       </div>
-                      <div class="d-flex align-items-center mb-2">
-                        <i class="bi bi-people text-muted me-2"></i>
-                        <small class="text-muted">Max {{ program.maxParticipants }} participants</small>
-                      </div>
-                      <div class="d-flex align-items-center">
-                        <i class="bi bi-currency-dollar text-muted me-2"></i>
-                        <small class="text-muted">
-                          {{ program.cost === 0 ? 'Free' : `$${program.cost} ${program.costUnit}` }}
+
+                      <div class="mb-3">
+                        <small class="text-muted d-block">Schedule:</small>
+                        <div v-for="schedule in program.schedule.slice(0, 2)" :key="schedule.day" class="small text-muted">
+                          {{ schedule.day }}s: {{ schedule.start }} - {{ schedule.end }}
+                        </div>
+                        <small v-if="program.schedule.length > 2" class="text-muted">
+                          +{{ program.schedule.length - 2 }} more days
                         </small>
                       </div>
                     </div>
-
-                    <div class="mb-3">
-                      <small class="text-muted d-block">Schedule:</small>
-                      <div v-for="schedule in program.schedule.slice(0, 2)" :key="schedule.day" class="small text-muted">
-                        {{ schedule.day }}s: {{ schedule.start }} - {{ schedule.end }}
+                    <div class="card-footer bg-transparent border-0">
+                      <div class="d-flex gap-2">
+                        <RouterLink 
+                          :to="{ name: 'edit-program', params: { id: program.id } }" 
+                          class="btn btn-primary btn-sm flex-fill"
+                        >
+                          <i class="bi bi-pencil me-1"></i>
+                          Edit
+                        </RouterLink>
+                        <button 
+                          @click="viewProgramDetails(program)" 
+                          class="btn btn-outline-secondary btn-sm"
+                        >
+                          <i class="bi bi-eye"></i>
+                        </button>
                       </div>
-                      <small v-if="program.schedule.length > 2" class="text-muted">
-                        +{{ program.schedule.length - 2 }} more days
-                      </small>
                     </div>
                   </div>
-                  <div class="card-footer bg-transparent border-0">
-                    <div class="d-flex gap-2">
-                      <RouterLink 
-                        :to="{ name: 'edit-program', params: { id: program.id } }" 
-                        class="btn btn-primary btn-sm flex-fill"
-                      >
-                        <i class="bi bi-pencil me-1"></i>
-                        Edit
-                      </RouterLink>
-                      <button 
-                        @click="viewProgramDetails(program)" 
-                        class="btn btn-outline-secondary btn-sm"
-                      >
-                        <i class="bi bi-eye"></i>
-                      </button>
+                </div>
+              </div>
+
+              <!-- Empty Active Programs State -->
+              <div v-if="activePrograms.length === 0 && cancelledPrograms.length > 0" class="text-center py-4">
+                <i class="bi bi-clipboard-data display-4 text-muted mb-3" aria-hidden="true"></i>
+                <h6 class="text-muted mb-3">No Active Programs</h6>
+                <p class="text-muted mb-4">
+                  You don't have any active programs at the moment. Create a new program or check your archived programs below.
+                </p>
+                <RouterLink :to="{ name: 'launch-program' }" class="btn btn-outline-success">
+                  <i class="bi bi-plus-circle me-2" aria-hidden="true"></i>
+                  Create New Program
+                </RouterLink>
+              </div>
+
+              <!-- Archive Section -->
+              <div v-if="cancelledPrograms.length > 0" class="mt-5">
+                <div class="d-flex align-items-center mb-3">
+                  <button 
+                    @click="toggleArchive" 
+                    class="btn btn-outline-secondary btn-sm me-3"
+                    :class="{ 'collapsed': !showArchive }"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    :data-bs-target="'#archiveCollapse'"
+                    :aria-expanded="showArchive"
+                    aria-controls="archiveCollapse"
+                  >
+                    <i class="bi" :class="showArchive ? 'bi-chevron-down' : 'bi-chevron-right'"></i>
+                  </button>
+                  <h6 class="mb-0 text-muted">
+                    <i class="bi bi-archive me-2"></i>
+                    Cancelled Programs ({{ cancelledPrograms.length }})
+                  </h6>
+                </div>
+                
+                <div class="collapse" :class="{ 'show': showArchive }" id="archiveCollapse">
+                  <div class="row g-4">
+                    <div v-for="program in cancelledPrograms" :key="program.id" class="col-md-6 col-lg-4">
+                      <div class="card h-100 border-0 shadow-sm archive-card">
+                        <div class="card-header bg-light border-0">
+                          <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                              <h6 class="card-title mb-1">{{ program.title }}</h6>
+                              <small class="text-muted">{{ program.sport }}</small>
+                            </div>
+                            <span class="badge bg-danger">Cancelled</span>
+                          </div>
+                        </div>
+                        <div class="card-body">
+                          <p class="card-text text-muted small mb-3">
+                            {{ program.description.length > 100 ? program.description.substring(0, 100) + '...' : program.description }}
+                          </p>
+                          
+                          <div class="mb-3">
+                            <div class="d-flex align-items-center mb-2">
+                              <i class="bi bi-geo-alt text-muted me-2"></i>
+                              <small class="text-muted">{{ program.venue?.name || 'Venue TBD' }}</small>
+                            </div>
+                            <div class="d-flex align-items-center mb-2">
+                              <i class="bi bi-people text-muted me-2"></i>
+                              <small class="text-muted">Max {{ program.maxParticipants }} participants</small>
+                            </div>
+                            <div class="d-flex align-items-center">
+                              <i class="bi bi-currency-dollar text-muted me-2"></i>
+                              <small class="text-muted">
+                                {{ program.cost === 0 ? 'Free' : `$${program.cost} ${program.costUnit}` }}
+                              </small>
+                            </div>
+                          </div>
+
+                          <div class="mb-3">
+                            <small class="text-muted d-block">Schedule:</small>
+                            <div v-for="schedule in program.schedule.slice(0, 2)" :key="schedule.day" class="small text-muted">
+                              {{ schedule.day }}s: {{ schedule.start }} - {{ schedule.end }}
+                            </div>
+                            <small v-if="program.schedule.length > 2" class="text-muted">
+                              +{{ program.schedule.length - 2 }} more days
+                            </small>
+                          </div>
+
+                          <div v-if="program.cancelled_at" class="mb-3">
+                            <small class="text-muted d-block">Cancelled:</small>
+                            <small class="text-muted">{{ formatDate(program.cancelled_at) }}</small>
+                          </div>
+                        </div>
+                        <div class="card-footer bg-transparent border-0">
+                          <div class="d-flex gap-2">
+                            <button 
+                              @click="viewProgramDetails(program)" 
+                              class="btn btn-outline-secondary btn-sm flex-fill"
+                            >
+                              <i class="bi bi-eye me-1"></i>
+                              View Details
+                            </button>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -232,6 +346,21 @@ const myPrograms = ref([]);
 const programsLoading = ref(false);
 const programsError = ref(null);
 
+// Export state
+const isExporting = ref(false);
+
+// Archive state
+const showArchive = ref(false);
+
+// Computed properties for program filtering
+const activePrograms = computed(() => {
+  return myPrograms.value.filter(program => program.status !== 'cancelled');
+});
+
+const cancelledPrograms = computed(() => {
+  return myPrograms.value.filter(program => program.status === 'cancelled');
+});
+
 // Load user programs
 async function loadMyPrograms() {
   if (!currentUser.value.user?.email) return;
@@ -282,6 +411,28 @@ onUnmounted(() => {
   }
 });
 
+// Toggle archive visibility
+function toggleArchive() {
+  showArchive.value = !showArchive.value;
+}
+
+// Format date for display
+function formatDate(date) {
+  if (!date) return 'Unknown';
+  
+  try {
+    // Handle Firestore timestamp
+    if (date.toDate) {
+      return date.toDate().toLocaleDateString();
+    }
+    // Handle regular date string
+    return new Date(date).toLocaleDateString();
+  } catch (error) {
+    console.error('Error formatting date:', error);
+    return 'Invalid date';
+  }
+}
+
 // View program details
 function viewProgramDetails(program) {
   router.push({ name: 'program', params: { id: program.id } });
@@ -294,6 +445,49 @@ async function handleLogout() {
     router.push({ name: 'home' });
   } catch (error) {
     console.error('Logout error:', error);
+  }
+}
+
+// Export to PDF
+async function exportToPDF() {
+  if (!currentUser.value.user?.email || activePrograms.value.length === 0) {
+    return;
+  }
+
+  try {
+    isExporting.value = true;
+    
+    // Call the Cloud Function to generate PDF
+    const result = await dataService.generateOrganizerReport({
+      organizerEmail: currentUser.value.user.email,
+      includeCancelled: false // Only active programs for now
+    });
+
+             if (result.success && result.pdfUrl) {
+               // Create a direct download link for PDF
+               const link = document.createElement('a');
+               link.href = result.pdfUrl;
+               link.download = `organizer-report-${new Date().toISOString().split('T')[0]}.pdf`;
+               link.target = '_blank';
+               
+               // Add the link to the page temporarily
+               document.body.appendChild(link);
+               link.click();
+               document.body.removeChild(link);
+               
+               console.log('PDF report download initiated');
+               
+               // Show success message
+               programsError.value = '';
+               alert('PDF report download started! If it doesn\'t download automatically, the file will open in a new tab.');
+             } else {
+               throw new Error(result.message || 'Failed to generate report');
+             }
+  } catch (error) {
+    console.error('Export error:', error);
+    programsError.value = `Export failed: ${error.message}`;
+  } finally {
+    isExporting.value = false;
   }
 }
 </script>
@@ -309,5 +503,42 @@ async function handleLogout() {
 
 .display-1 {
   font-size: 4rem;
+}
+
+/* Archive section styles */
+.archive-card {
+  opacity: 0.8;
+  transition: opacity 0.3s ease;
+}
+
+.archive-card:hover {
+  opacity: 1;
+}
+
+.archive-card .card-header {
+  background-color: #f8f9fa !important;
+}
+
+.archive-card .badge {
+  font-size: 0.75rem;
+}
+
+/* Collapse button styles */
+.btn[data-bs-toggle="collapse"] {
+  transition: transform 0.2s ease;
+}
+
+.btn[data-bs-toggle="collapse"]:not(.collapsed) {
+  transform: rotate(0deg);
+}
+
+.btn[data-bs-toggle="collapse"].collapsed {
+  transform: rotate(0deg);
+}
+
+/* Archive section divider */
+.mt-5 {
+  border-top: 1px solid #e9ecef;
+  padding-top: 1.5rem;
 }
 </style>

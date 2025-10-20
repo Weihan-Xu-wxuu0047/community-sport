@@ -184,7 +184,9 @@ class DataService {
   async searchPrograms(filters = {}) {
     try {
       const programs = await this.getPrograms();
-      let results = [...programs];
+      
+      // Filter out cancelled programs first
+      let results = programs.filter(p => p.status !== 'cancelled');
 
       // Text search
       if (filters.query && filters.query.trim()) {
@@ -749,8 +751,11 @@ class DataService {
     try {
       const programs = await this.getPrograms();
       
+      // Filter out cancelled programs
+      const activePrograms = programs.filter(p => p.status !== 'cancelled');
+      
       // Score & pick up to specified limit for "Featured"
-      const withScore = programs.map(p => {
+      const withScore = activePrograms.map(p => {
         let score = 0;
         if (p.inclusivityTags?.includes('beginner-friendly')) score += 2;
         if (p.cost === 0) score += 2;
@@ -763,6 +768,37 @@ class DataService {
     } catch (error) {
       console.error('Error getting featured programs:', error);
       return [];
+    }
+  }
+
+  // Generate organizer PDF report
+  async generateOrganizerReport(data) {
+    try {
+      console.log('Generating organizer report...', data);
+      
+      const generateReport = httpsCallable(functions, 'generateOrganizerReport');
+      const result = await generateReport(data);
+      
+      if (result.data.success) {
+        console.log('Organizer report generated successfully');
+        return result.data;
+      } else {
+        throw new Error(result.data.message || 'Failed to generate report');
+      }
+    } catch (error) {
+      console.error('Error generating organizer report:', error);
+      
+      // Extract meaningful error message
+      let errorMessage = 'Failed to generate report. Please try again.';
+      if (error.code === 'functions/invalid-argument') {
+        errorMessage = error.message || 'Invalid report data.';
+      } else if (error.code === 'functions/unauthenticated') {
+        errorMessage = 'Please log in to generate reports.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      throw new Error(errorMessage);
     }
   }
 }
